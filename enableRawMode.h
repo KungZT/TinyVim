@@ -13,6 +13,6 @@ void enableRawMode(){
     tcgetattr(STDIN_FILENO, &orig_termios);
     atexit(disableRawMode);
     struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);//关闭回显模式,允许逐字节而不是逐行读取    
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN | IXON);//关闭回显模式,允许逐字节而不是逐行读取，禁用CtrlC    
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
