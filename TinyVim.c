@@ -1,7 +1,7 @@
 #include <unistd.h>
-#include <enableRawMode.h>
+#include "enableRawMode.h"
+#include "disableRawMode.h"
 
-void enableRawMode()
 int main(){
     enableRawMode();
     char c;
