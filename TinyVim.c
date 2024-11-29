@@ -6,13 +6,16 @@
 
 int main(){
     enableRawMode();
-    char c;
-    while (read(STDIN_FILENO , &c, 1)==1 && c != 'q') {
+	while (1)
+	{	
+    	char c = '\0';
+    	read(STDIN_FILENO , &c, 1);
 	    if (iscntrl(c)){
 		printf("%d\n", c);
 	    }else{
 		printf("%d('%c')\n", c , c);
 	    }
+		if (c == 'q') break;
 	}
     return 0;
 }
