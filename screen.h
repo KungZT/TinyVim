@@ -1,10 +1,13 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
+
 #include <string.h>
 #include <stdio.h> 
+#include <sys/types.h>
 #include "RawMode.h"
 #include "TinyVim.h"
+
 
 struct abuf {
     char *b;
@@ -24,5 +27,8 @@ void initEditor();
 void abAppend(struct abuf *ab, const char *s, int len);
 void abFree(struct abuf *ab);
 void editorMoveCursor(int key);
+void editorOpen(char *filename);
+void editorAppendRow(char *s,size_t len);
+
 
 #endif

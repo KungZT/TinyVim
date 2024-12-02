@@ -4,12 +4,17 @@
 #include "TinyVim.h"
 #include "RawMode.h"
 #include "screen.h"
+// #include "editor.c"
+
 
 // #define CTRL_KEY(k) ((k) & 0x1f)
 
-int main(){
+int main(int argc, char *argv[]){
     enableRawMode();
 	initEditor();
+	if (argc >= 2) {
+		editorOpen(argv[1]);
+	}
 	while (1)
 	{	
 		editorRefreshScreen();
