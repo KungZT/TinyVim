@@ -67,7 +67,7 @@ void editorProcessKeypress()
         break;
 
     case CTRL_KEY('s'):
-    editorSave();
+        editorSave();
         break;
 
     case ARROW_LEFT:
@@ -77,7 +77,7 @@ void editorProcessKeypress()
         editorMoveCursor(c);
         break;    
     case BACKSPACE:
-    // case CTRL_KEY('h'):
+        editorDelchar();
         break;
 //允许任何未映射到其他编辑器功能的按键直接插入到正在编辑的文本中。
     default:
@@ -250,6 +250,8 @@ void editorMoveCursor(int key)
 }
 
 void editorOpen(char *filename){
+    free(E.filename);
+    E.filename = strdup(filename);//strdup()来自<string.h> 。它复制给定的字符串，分配所需的内存并假设您将free()该内存。
     FILE *fp = fopen(filename, "r");
     if (!fp) die("fopen");
 
