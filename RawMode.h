@@ -22,7 +22,8 @@ typedef struct erow {
 
 struct editorConfig{
     int cx , cy;
-    int rowoff;
+    int rowoff;//垂直
+    int coloff;//水平
     int screenrows;
     int screencols;
     int numrows;

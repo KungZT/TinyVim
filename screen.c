@@ -82,7 +82,7 @@ void editorRefreshScreen()
 
 //屏幕刷新后光标到正确位置
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, (E.cx + 1));//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1));//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
     abAppend(&ab, buf, strlen(buf));
 //恢复光标
     // abAppend(&ab, "\x1b[H", 3);
@@ -121,9 +121,10 @@ void editorDrawRows(struct abuf *ab)
             abAppend(ab, "~", 1);
         }
         }else{
-            int len = E.row[filerow].size;
+            int len = E.row[filerow].size - E.coloff;
+            if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row[filerow].chars, len);
+            abAppend(ab, &E.row[filerow].chars[E.coloff], len);//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
         }
         abAppend(ab , "\x1b[K", 3);
         if (y < E.screenrows - 1){
@@ -171,6 +172,7 @@ void initEditor()
     E.cx = 0;
     E.cy = 0;
     E.rowoff = 0;
+    E.coloff = 0;
     E.numrows = 0;
     E.row = NULL;
     if (getWindowSize(&E.screenrows, &E.screencols) == -1)
@@ -194,14 +196,24 @@ void abFree(struct abuf *ab)
 
 void editorMoveCursor(int key)
 {
+    erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+
     switch (key){
         case ARROW_LEFT:
         if (E.cx != 0){
-        E.cx--;}
+        E.cx--;}else if (E.cy > 0){
+            E.cy--;
+            E.cx = E.row[E.cy].size;
+        }//允许向左移动到上一行
         break;
         case ARROW_RIGHT:
-        if (E.cx != E.screencols - 1){
-        E.cx++;}
+        // 向右不允许到末尾
+        if (row && E.cx < row->size){
+        E.cx++;
+        }else if (row && E.cx == row->size){
+            E.cy++;
+            E.cx = 0;
+        }//允许向右移动到下一行
         break;
         case ARROW_UP:
         if (E.cy != 0){
@@ -211,6 +223,12 @@ void editorMoveCursor(int key)
         if (E.cy < E.numrows){
         E.cy++;}
         break;
+    }
+    //纠正E.cx如果它最终超出了所在行的末尾
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+    int rowlen = row ? row->size : 0;
+    if (E.cx > rowlen){
+    E.cx = rowlen;
     }
 }
 
@@ -248,6 +266,12 @@ void editorScroll()
     }
     if (E.cy >= E.rowoff + E.screenrows){
         E.rowoff = E.cy - E.screenrows + 1;
+    }
+    if (E.cx < E.coloff){
+        E.coloff = E.cx;
+    }
+    if (E.cx >= E.coloff + E.screencols){
+        E.coloff = E.cx - E.screencols + 1;
     }
 }
 //第一个if语句检查光标是否位于可见窗口上方，
