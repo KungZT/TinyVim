@@ -11,6 +11,7 @@
 #include "screen.h"
 
 enum editorKey {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_UP ,
     ARROW_RIGHT ,
@@ -56,10 +57,17 @@ void editorProcessKeypress()
     int c = editorReadKey();
     switch (c)
     {
+    case '\r':
+    break;
+
     case CTRL_KEY('q'):
         write(STDOUT_FILENO, "\x1b[2J", 4);//from unistd,,esc=27
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(0);
+        break;
+
+    case CTRL_KEY('s'):
+    editorSave();
         break;
 
     case ARROW_LEFT:
@@ -68,7 +76,14 @@ void editorProcessKeypress()
     case ARROW_DOWN:
         editorMoveCursor(c);
         break;    
-    }
+    case BACKSPACE:
+    // case CTRL_KEY('h'):
+        break;
+//允许任何未映射到其他编辑器功能的按键直接插入到正在编辑的文本中。
+    default:
+        editorInsertChar(c);
+        break;
+        }
 }
 
 void editorRefreshScreen()
@@ -82,7 +97,8 @@ void editorRefreshScreen()
 
 //屏幕刷新后光标到正确位置
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, 
+    E.rx - E.coloff + 1);//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
     abAppend(&ab, buf, strlen(buf));
 //恢复光标
     // abAppend(&ab, "\x1b[H", 3);
@@ -175,6 +191,7 @@ void initEditor()
     E.coloff = 0;
     E.numrows = 0;
     E.row = NULL;
+    E.filename = NULL;
     if (getWindowSize(&E.screenrows, &E.screencols) == -1)
         die("getWindowSize");
 }
@@ -265,17 +282,21 @@ void editorAppendRow(char *s,size_t len){
 
 void editorScroll()
 {
+    E.rx = 0;
+    if (E.cy < E.numrows){
+        E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
+    }
     if (E.cy < E.rowoff){
         E.rowoff = E.cy;
     }
     if (E.cy >= E.rowoff + E.screenrows){
         E.rowoff = E.cy - E.screenrows + 1;
     }
-    if (E.cx < E.coloff){
-        E.coloff = E.cx;
+    if (E.rx < E.coloff){
+        E.coloff = E.rx;
     }
-    if (E.cx >= E.coloff + E.screencols){
-        E.coloff = E.cx - E.screencols + 1;
+    if (E.rx >= E.coloff + E.screencols){
+        E.coloff = E.rx - E.screencols + 1;
     }
 }
 //第一个if语句检查光标是否位于可见窗口上方，
@@ -308,4 +329,118 @@ void editorUpdateRow(erow *row)
     }
     row->render[idx] = '\0';
     row->rsize = idx;
+}
+
+
+// //循环遍历行的chars并计算选项卡的数量，以便知道要为render分配多少内存。
+// 每个制表符所需的最大字符数为 8。 row->size已经为每个制表符计为 1，
+// 因此我们将制表符数量乘以 7 并将其添加到row->size以获得我们将要使用的最大内存量需要渲染的行。
+int editorRowCxToRx(erow *row, int cx)
+{
+    int rx = 0;
+    int j;
+    for (j = 0; j < cx; j++){
+        if (row->chars[j] == '\t')
+        rx += (VIM_TABSTOP - 1) - (rx % VIM_TABSTOP);
+        rx++;
+    }
+    return rx;
+}
+//对于每个字符，如果它是制表符，
+// 我们使用rx % KILO_TAB_STOP来找出最后一个制表位右侧有多少列，
+// 然后从KILO_TAB_STOP - 1中减去该值以找出最后一个制表位左侧有多少列下一个制表位。
+// 我们将该金额添加到rx以到达下一个制表位的左侧，然后无条件rx++语句使我们正确到达下一个制表位。
+// 请注意即使我们当前处于制表位，它也是如何工作的。
+
+
+
+void editorRowInsertChar(erow *row, int at, int c)
+{
+    if (at < 0 || at > row->size) at = row->size;
+    row->chars = realloc(row->chars, row->size + 2);
+    memmove(&row->chars[at+1], &row->chars[at], row->size-at+1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+}
+//at允许超出字符串末尾一个字符，在这种情况下，应将该字符插入到字符串末尾。
+
+void editorInsertChar(int c)
+{
+    if (E.cy == E.numrows){
+        editorAppendRow("", 0);
+    }
+    editorRowInsertChar(&E.row[E.cy], E.cx, c);
+    E.cx++;
+}
+//如果E.cy == E.numrows ，则光标位于文件末尾后的波浪线上，
+// 因此我们需要在插入字符之前向文件追加新行。插入一个字符后，
+// 我们将光标向前移动，以便用户插入的下一个字符位于刚刚插入的字符之后。
+
+
+char *editorRowsToString(int *buflen)
+{
+    int totallen = 0;
+    int j;
+    for (j = 0; j < E.numrows; j++){
+        totallen += E.row[j].size + 1;
+    }
+    *buflen = totallen;
+
+    char *buf = malloc(totallen);
+    char *p = buf;
+    for (j = 0; j < E.numrows; j++){
+        memcpy(p,E.row[j].chars, E.row[j].size);
+        p += E.row[j].size;
+        *p = '\n';
+        p++;
+    }
+    return buf;
+}
+// //将每行文本的长度相加，为我们将添加到每行末尾的换行符添加1 。
+// 我们将总长度保存到buflen中，以告诉调用者该字符串有多长。
+// 在分配所需的内存后，我们循环遍历行，并且 memcpy()将每行的内容复制到缓冲区的末尾，
+// 并在每行后面附加一个换行符。
+
+
+void editorSave()
+{
+    if (E.filename == NULL) return;
+    int len;
+    char *buf = editorRowsToString(&len);
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    ftruncate(fd, len);
+    write(fd, buf, len);
+    close(fd);
+    free(buf);
+}
+//如果它是一个新文件，那么E.filename将为NULL ，
+// 我们不知道该文件保存在哪里，所以我们暂时不做任何事情就return 。稍后，我们将弄清楚如何提示用户输入文件名。
+// 否则，我们调用editorRowsToString() ，并将字符串write()到E.filename中的路径。我们告诉open()我们要创建一个新文件（如果它尚不存在）（ O_CREAT ），并且我们要打开它进行读写（ O_RDWR ）。因为我们使用了O_CREAT标志，所以我们必须传递一个 
+// 包含新文件应具有的模式（权限）的额外参数。 0644是您通常需要的文本文件的标准权限。它授予文件所有者读取和写入文件的权限，其他人仅获得读取该文件的权限。
+// 覆盖文件的正常方法是将O_TRUNC标志传递给open() ，这会在将新数据写入其中之前完全截断文件，使其成为空文件。
+// 通过我们自己将文件截断为与我们计划写入的数据相同的长度，
+// 我们使整个覆盖操作更加安全，以防ftruncate()调用成功，
+// 但 write()调用失败。在这种情况下，该文件仍将包含之前的大部分数据。
+// 但是如果文件被open()完全截断 调用然后write()失败，您最终会丢失所有数据。
+
+void editorRowDelChar(erow *row, int at){
+    if (at < 0 || at >= row->size) return;
+    memmove(&row->chars[at], &row->chars[at+1], row->size-at-1);
+    row->size--;
+    editorUpdateRow(row);
+}
+// 与editorRowInsertChar()非常相似，只是我们不需要进行任何内存管理。
+// 我们只需使用memmove()用后面的字符覆盖已删除的字符（请注意，
+// 末尾的空字节包含在移动中）。然后我们减少行的size ，
+// 调用editorUpdateRow() ，并增加E.dirty 。
+
+
+void editorDelchar(){
+    if (E.cy == E.numrows) return;
+    erow *row = &E.row[E.cy];
+    if (E.cx > 0){
+        editorRowDelChar(row, E.cx-1);
+        E.cx--;
+    }
 }

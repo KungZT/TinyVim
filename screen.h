@@ -1,7 +1,7 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
-
+#include <fcntl.h>
 #include <string.h>
 #include <stdio.h> 
 #include <sys/types.h>
@@ -31,6 +31,11 @@ void editorOpen(char *filename);
 void editorAppendRow(char *s,size_t len);
 void editorScroll();
 void editorUpdateRow(erow *row);
-
+int editorRowCxToRx(erow *row, int cx);
+void editorRowInsertChar(erow *row, int at, int c);
+void editorInsertChar(int c);
+void editorSave();
+void editorRowDelChar(erow *row, int at);
+void editorDelchar();
 
 #endif
