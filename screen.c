@@ -123,7 +123,7 @@ void editorDrawRows(struct abuf *ab)
         {
             char welcome[80];
             int welcomelen = snprintf(welcome, sizeof(welcome),
-                "TinyVim Version %s",TinyVimVersion);
+                "TinyVim Version %s  author: 康镇涛 刘金环",TinyVimVersion);
             if (welcomelen > E.screencols) welcomelen = E.screencols;
             //居中
             int padding = (E.screencols - welcomelen) / 2;
