@@ -2,7 +2,7 @@
 ### 一个简单的类VIM文本编辑器
 ### 汇报人：康镇涛 刘金环
 
-
+***
 ## 功能实现
 
 ### 1 .终端属性配置
@@ -21,7 +21,9 @@ struct termios raw = E.orig_termios;
 }
 ```
 [ANSI转义序列](https://vt100.net/docs/vt100-ug/chapter3.html)
+
 |标志|含义|效果|
+|------|------|------|
 |IXON|启用软件流控制|禁用后，`ctrl+s`和`ctrl+q`将不会被发送给程序|
 |OPOST|启用输出处理|禁用后，所有字符原样传递|
 |ECHO|启用回显|禁用后，输入的字符不会显示在屏幕上|
@@ -29,18 +31,7 @@ struct termios raw = E.orig_termios;
 |VMIN|读取的最小字符数|设置为0时，读取字符数将不会被限制|
 |VTIME|读取超时|设置为0时，读取将一直等待，直到有字符为止|
 
-```
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
-        die("tcsetattr");
 
-
-    struct editorConfig{
-    int cx , cy;
-    int screenrows;
-    int screencols;
-    struct termios orig_termios;
-};
-```
 ### 2.初始化窗口
 
 窗口属性
@@ -110,7 +101,7 @@ int getCursorPosition(int *rows, int *cols)
 }
 ```
 
-##＃ 3.刷新屏幕内容
+### 3.刷新屏幕内容
 
 - `editorScroll()`: 滚动窗口
     - 调整视图的滚动偏移量`E.rowoff`和`E.coloff`
@@ -254,9 +245,173 @@ void editorProcessKeypress()
 - `editorReadKey()`: 读取用户输入
     - 对于普通按键，返回ASCII
     - 对于特殊按键，返回自定义的编码值
+  
 ### 7.处理光标移动
+- `cx`:光标列数
+- `cy`:光标行数
+```
+void editorMoveCursor(int key)
+{
+    erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+
+    switch (key){
+        case ARROW_LEFT:
+        if (E.cx != 0){
+        E.cx--;}else if (E.cy > 0){
+            E.cy--;
+            E.cx = E.row[E.cy].size;
+        }//允许向左移动到上一行
+        break;
+        case ARROW_RIGHT:
+        // 向右不允许到末尾
+        if (row && E.cx < row->size){
+        E.cx++;
+        }else if (row && E.cx == row->size){
+            E.cy++;
+            E.cx = 0;
+        }//允许向右移动到下一行
+        break;
+        case ARROW_UP:
+        if (E.cy != 0){
+        E.cy--;}
+        break;
+        case ARROW_DOWN:
+        if (E.cy < E.numrows){
+        E.cy++;}
+        break;
+    }
+    //纠正E.cx如果它最终超出了所在行的末尾
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+    int rowlen = row ? row->size : 0;
+    if (E.cx > rowlen){
+    E.cx = rowlen;
+    }
+}
+```
+
+### 8.删除字符
+-对比光标位置与文件内容
+-删除后字符向左移
+-字符减一
+
+```
+void editorDelchar(){
+    if (E.cy == E.numrows) return;
+    erow *row = &E.row[E.cy];
+    if (E.cx > 0){
+        editorRowDelChar(row, E.cx-1);
+        E.cx--;
+    }
+}
+```
+```
+void editorRowDelChar(erow *row, int at){
+    if (at < 0 || at >= row->size) return;
+    memmove(&row->chars[at], &row->chars[at+1], row->size-at-1);
+    row->size--;
+    editorUpdateRow(row);
+}
+```
+### 9.插入字符
+- 如果在最后一行，则创建新行
+- 不在最后则插入字符
+```
+void editorInsertChar(int c)
+{
+    if (E.cy == E.numrows){
+        editorAppendRow("", 0);
+    }
+    editorRowInsertChar(&E.row[E.cy], E.cx, c);
+    E.cx++;
+}
+```
+```
+void editorAppendRow(char *s,size_t len){
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+    int at = E.numrows;
+    E.row[at].size = len;
+    E.row[at].chars = malloc(len+1);
+    memcpy(E.row[at].chars, s, len);
+    E.row[at].chars[len] = '\0';
+
+    E.row[at].rsize = 0;
+    E.row[at].render = NULL;
+    editorUpdateRow(&E.row[at]);
+    E.numrows++;
+}
+```
+```
+void editorRowInsertChar(erow *row, int at, int c)
+{
+    if (at < 0 || at > row->size) at = row->size;
+    row->chars = realloc(row->chars, row->size + 2);
+    memmove(&row->chars[at+1], &row->chars[at], row->size-at+1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+}
+```
+### 10.打开文件
+- 更新文件名
+- 逐行读取文件
+- 将数据存储到E.row[]中
+```
+void editorOpen(char *filename){
+    free(E.filename);
+    E.filename = strdup(filename);//strdup()来自<string.h> 。它复制给定的字符串，分配所需的内存并假设您将free()该内存。
+    FILE *fp = fopen(filename, "r");
+    if (!fp) die("fopen");
+
+    char *line = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+    while((linelen = getline(&line, &linecap, fp)) != -1){
+        while (linelen > 0 && (line[linelen-1] == '\n' || line[linelen-1] == '\r'))
+        linelen--;
+    editorAppendRow(line, linelen);
+    }
+    free(line);
+    fclose(fp);
+}
+```
+```
+void editorAppendRow(char *s,size_t len){
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+    int at = E.numrows;
+    E.row[at].size = len;
+    E.row[at].chars = malloc(len+1);
+    memcpy(E.row[at].chars, s, len);
+    E.row[at].chars[len] = '\0';
+
+    E.row[at].rsize = 0;
+    E.row[at].render = NULL;
+    editorUpdateRow(&E.row[at]);
+    E.numrows++;
+}
+```
+
+### 11.保存文件
+- 将所有行合并成一个字符串
+- `open(E.filename, O_RDWR | O_CREAT):读写模式，0644:文件权限
+
+```
+void editorSave()
+{
+    if (E.filename == NULL) return;
+    int len;
+    char *buf = editorRowsToString(&len);
+    int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+    ftruncate(fd, len);
+    write(fd, buf, len);
+    close(fd);
+    free(buf);
+}
+```
 
 
-
-
-
+### 12.待实现功能
+状态栏
+语法高亮
+按键关联
+多种光标跳转方式
+搜索
