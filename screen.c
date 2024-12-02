@@ -73,6 +73,7 @@ void editorProcessKeypress()
 
 void editorRefreshScreen()
 {
+    editorScroll();
     struct abuf ab = ABUF_INIT; //初始化缓冲区
 
     abAppend(&ab, "\x1b[?25l", 6);//隐藏光标
@@ -81,7 +82,7 @@ void editorRefreshScreen()
 
 //屏幕刷新后光标到正确位置
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy + 1), (E.cx + 1));
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, (E.cx + 1));//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
     abAppend(&ab, buf, strlen(buf));
 //恢复光标
     // abAppend(&ab, "\x1b[H", 3);
@@ -100,7 +101,8 @@ void editorDrawRows(struct abuf *ab)
     int y;
     for (y = 0; y < E.screenrows; y++)
     {
-        if (y >= E.numrows){
+        int filerow = y + E.rowoff;
+        if (filerow >= E.numrows){
         if (E.numrows == 0 && y == E.screenrows / 3)
         {
             char welcome[80];
@@ -119,9 +121,9 @@ void editorDrawRows(struct abuf *ab)
             abAppend(ab, "~", 1);
         }
         }else{
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row[y].chars, len);
+            abAppend(ab, E.row[filerow].chars, len);
         }
         abAppend(ab , "\x1b[K", 3);
         if (y < E.screenrows - 1){
@@ -168,6 +170,7 @@ void initEditor()
 {
     E.cx = 0;
     E.cy = 0;
+    E.rowoff = 0;
     E.numrows = 0;
     E.row = NULL;
     if (getWindowSize(&E.screenrows, &E.screencols) == -1)
@@ -205,7 +208,7 @@ void editorMoveCursor(int key)
         E.cy--;}
         break;
         case ARROW_DOWN:
-        if (E.cy != E.screenrows - 1){
+        if (E.cy < E.numrows){
         E.cy++;}
         break;
     }
@@ -236,3 +239,18 @@ void editorAppendRow(char *s,size_t len){
     E.row[at].chars[len] = '\0';
     E.numrows++;
 }
+
+
+void editorScroll()
+{
+    if (E.cy < E.rowoff){
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows){
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+//第一个if语句检查光标是否位于可见窗口上方，
+// 如果是，则向上滚动到光标所在的位置。第二个if 语句检查光标是否超出可见窗口的底部，
+// 并且 包含稍微复杂的算术，因为E.rowoff指的是屏幕顶部的内容，
+// 而我们必须让E.screenrows参与讨论屏幕底部的内容。

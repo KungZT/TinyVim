@@ -29,6 +29,6 @@ void abFree(struct abuf *ab);
 void editorMoveCursor(int key);
 void editorOpen(char *filename);
 void editorAppendRow(char *s,size_t len);
-
+void editorScroll();
 
 #endif
