@@ -11,9 +11,10 @@ struct abuf {
     int len;
 };
 
+
 #define ABUF_INIT {NULL, 0}
 
-char editorReadKey();
+int editorReadKey();
 void editorProcessKeypress();
 void editorRefreshScreen();
 void editorDrawRows(struct abuf *ab);
@@ -22,6 +23,6 @@ int getWindowSize(int *rows, int *cols);
 void initEditor();
 void abAppend(struct abuf *ab, const char *s, int len);
 void abFree(struct abuf *ab);
-
+void editorMoveCursor(int key);
 
 #endif

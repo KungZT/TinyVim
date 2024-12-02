@@ -9,7 +9,16 @@
 #include "TinyVim.h"
 #include "RawMode.h"
 #include "screen.h"
-char editorReadKey()
+
+enum editorKey {
+    ARROW_LEFT = 1000,
+    ARROW_UP ,
+    ARROW_RIGHT ,
+    ARROW_DOWN 
+};
+
+
+int editorReadKey()
 {
     int nread;
     char c;
@@ -18,12 +27,33 @@ char editorReadKey()
         if (nread == -1 && errno != EAGAIN)
             die("read");
     }
+
+    if (c == '\x1b')
+    {
+        char seq[3];
+
+        if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
+        if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
+
+        if (seq[0] == '[')
+        {
+            switch (seq[1])
+            {
+            case 'A': return ARROW_UP;
+            case 'B': return ARROW_DOWN;
+            case 'C': return ARROW_RIGHT;
+            case 'D': return ARROW_LEFT;
+            }
+        }
+        return '\x1b';
+    }else{
     return c;
+    }
 }
 
 void editorProcessKeypress()
 {
-    char c = editorReadKey();
+    int c = editorReadKey();
     switch (c)
     {
     case CTRL_KEY('q'):
@@ -31,17 +61,30 @@ void editorProcessKeypress()
         write(STDOUT_FILENO, "\x1b[H", 3);
         exit(0);
         break;
+
+    case ARROW_LEFT:
+    case ARROW_RIGHT:
+    case ARROW_UP:
+    case ARROW_DOWN:
+        editorMoveCursor(c);
+        break;    
     }
 }
 
 void editorRefreshScreen()
 {
-    struct abuf ab = ABUF_INIT;
+    struct abuf ab = ABUF_INIT; //初始化缓冲区
 
-    abAppend(&ab, "\x1b[?25l", 6);
-    abAppend(&ab, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[?25l", 6);//隐藏光标
+    abAppend(&ab, "\x1b[H", 3);//移到左上角
     editorDrawRows(&ab);
-    abAppend(&ab, "\x1b[H", 3);
+
+//屏幕刷新后光标到正确位置
+    char buf[32];
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy + 1), (E.cx + 1));
+    abAppend(&ab, buf, strlen(buf));
+//恢复光标
+    // abAppend(&ab, "\x1b[H", 3);
     abAppend(&ab, "\x1b[?25h", 6);
     write(STDOUT_FILENO, ab.b, ab.len);
     abFree(&ab);
@@ -117,12 +160,15 @@ int getCursorPosition(int *rows, int *cols)
 
 void initEditor()
 {
+    E.cx = 0;
+    E.cy = 0;
+    E.numrows = 0;
     if (getWindowSize(&E.screenrows, &E.screencols) == -1)
         die("getWindowSize");
 }
 
 
-void abAppend(struct abuf *ab, const char *s, int len)
+void abAppend(struct abuf *ab, const char *s, int len)//len 字节的内容从 s 被复制到新的缓冲区 new 中的合适位置
 {
     char *new = realloc(ab->b, ab->len + len);
     if (new == NULL) return;
@@ -135,3 +181,27 @@ void abFree(struct abuf *ab)
 {
     free(ab->b);
 }
+
+void editorMoveCursor(int key)
+{
+    switch (key){
+        case ARROW_LEFT:
+        if (E.cx != 0){
+        E.cx--;}
+        break;
+        case ARROW_RIGHT:
+        if (E.cx != E.screencols - 1){
+        E.cx++;}
+        break;
+        case ARROW_UP:
+        if (E.cy != 0){
+        E.cy--;}
+        break;
+        case ARROW_DOWN:
+        if (E.cy != E.screenrows - 1){
+        E.cy++;}
+        break;
+    }
+}
+
+
