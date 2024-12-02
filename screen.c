@@ -82,7 +82,7 @@ void editorRefreshScreen()
 
 //屏幕刷新后光标到正确位置
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1));//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
     abAppend(&ab, buf, strlen(buf));
 //恢复光标
     // abAppend(&ab, "\x1b[H", 3);
@@ -121,10 +121,10 @@ void editorDrawRows(struct abuf *ab)
             abAppend(ab, "~", 1);
         }
         }else{
-            int len = E.row[filerow].size - E.coloff;
+            int len = E.row[filerow].rsize - E.coloff;
             if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, &E.row[filerow].chars[E.coloff], len);//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
+            abAppend(ab, &E.row[filerow].render[E.coloff], len);//这是因为E.cy不再指的是 屏幕上的光标。它指的是光标在范围内的位置 文本文件。为了将光标定位在屏幕上，我们现在必须减去 E.rowoff来自E.cy的值。
         }
         abAppend(ab , "\x1b[K", 3);
         if (y < E.screenrows - 1){
@@ -255,6 +255,10 @@ void editorAppendRow(char *s,size_t len){
     E.row[at].chars = malloc(len+1);
     memcpy(E.row[at].chars, s, len);
     E.row[at].chars[len] = '\0';
+
+    E.row[at].rsize = 0;
+    E.row[at].render = NULL;
+    editorUpdateRow(&E.row[at]);
     E.numrows++;
 }
 
@@ -278,3 +282,30 @@ void editorScroll()
 // 如果是，则向上滚动到光标所在的位置。第二个if 语句检查光标是否超出可见窗口的底部，
 // 并且 包含稍微复杂的算术，因为E.rowoff指的是屏幕顶部的内容，
 // 而我们必须让E.screenrows参与讨论屏幕底部的内容。
+
+
+void editorUpdateRow(erow *row)
+{
+    int tabs = 0;
+    int j;
+    for (j = 0; j < row->size; j++){
+        if (row->chars[j] == '\t') tabs++;    
+    }
+    free(row->render);
+    //循环遍历行的chars并计算选项卡的数量，
+    // 以便知道要为render分配多少内存。每个制表符所需的最大字符数为 8。 
+    // row->size已经为每个制表符计为 1，因此我们将制表符数量乘以 7 
+    // 并将其添加到row->size以获得我们将要使用的最大内存量需要渲染的行。
+    row->render = malloc(row->size + tabs*(VIM_TABSTOP-1) + 1);
+    int idx = 0;
+    for (j = 0; j < row->size; j++){
+        if (row->chars[j] == '\t'){
+            row->render[idx++] = ' ';
+            while (idx % VIM_TABSTOP != 0) row->render[idx++] = ' ';
+        }else{
+            row->render[idx++] = row->chars[j];
+        }
+    }
+    row->render[idx] = '\0';
+    row->rsize = idx;
+}

@@ -17,7 +17,9 @@
 //erow代表“编辑器行”，并将一行文本存储为指向动态分配的字符数据和长度的指针。 typedef让我们将类型称为erow而不是struct erow 。
 typedef struct erow {
     int size;   
+    int rsize;
     char *chars;
+    char *render;
 } erow;
 
 struct editorConfig{

@@ -11,6 +11,6 @@
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define TinyVimVersion "0.0.1"
-
+#define VIM_TABSTOP 8
 
 #endif
