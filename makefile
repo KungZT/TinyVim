@@ -10,11 +10,13 @@ $(TARGET): $(OBJS)
 TinyVim.o: TinyVim.c screen.h RawMode.h TinyVim.h
 	$(CC) $(CFLAGS) -c TinyVim.c
 
-screen.o: screen.c screen.h RawMode.h TinyVim.h
+
+screen.o: screen.c screen.h RawMode.h TinyVim.h 
 	$(CC) $(CFLAGS) -c screen.c
 
 RawMode.o: RawMode.c RawMode.h TinyVim.h
 	$(CC) $(CFLAGS) -c RawMode.c
+
 
 # editor.o: editor.c RawMode.h screen.h Tinyvim.h
 # 	$(CC) $(CFLAGS) -c editor.c

@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include "RawMode.h"
 #include "TinyVim.h"
+#include <time.h>
+#include <stdarg.h>
 
 
 struct abuf {
@@ -37,5 +39,7 @@ void editorInsertChar(int c);
 void editorSave();
 void editorRowDelChar(erow *row, int at);
 void editorDelchar();
-
+void editorSetStatusMessage(const char *fmt, ...);
+void editorDrawStatusBar(struct abuf *ab);
+void editorDrawMessageBar(struct abuf *ab);
 #endif

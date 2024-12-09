@@ -4,6 +4,9 @@
 #include "TinyVim.h"
 #include "RawMode.h"
 #include "screen.h"
+// #include "StatusBar.c"
+
+
 // #include "editor.c"
 
 
@@ -15,6 +18,9 @@ int main(int argc, char *argv[]){
 	if (argc >= 2) {
 		editorOpen(argv[1]);
 	}
+
+	editorSetStatusMessage("author: Kang Zhentao Liu Jinhuan");
+
 	while (1)
 	{	
 		editorRefreshScreen();

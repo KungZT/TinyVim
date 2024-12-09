@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-
+# include <time.h>
 // 从 TinyVim.h 中获取 editorConfig 的定义
 // #include "TinyVim.h"
 // #include "screen.h"
@@ -32,6 +32,8 @@ struct editorConfig{
     int numrows;
     erow *row;
     char *filename;
+    char statusmsg[80];
+    time_t statusmsg_time;
     struct termios orig_termios;
 };
 
